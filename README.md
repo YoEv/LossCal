@@ -143,96 +143,88 @@ pip install "numpy==1.26.4" --force-reinstall # version collision
         loss = model.loss(encoded)  # 例如均方误差
         print(f"重建损失: {loss.item()}")
         ```
-        
-    
-    - Attached are some other results from DeepSeek I haven’t try yet:
-        
-        Prompt: 
-        
-        好，我们重新思考一下这个问题。
-        第一个问题：
-        我给一个模型我的audio 或者 midi input，然后让那个音乐生成模型生成一个generated audio，然后呢我这个audio或者midi input都是从原来的一首音乐的original audio产生的，那么我怎么在这个音乐生成模型的内部去对比这个generated audio和original audio的loss呢？或者一个返回的likelihood？
-        第二个问题：
-        生成模型在生成的过程中，会给一个loss或者likelihood吗？按照我的前辈的说法是，是每一次生成都会返回一个loss。
-        第三个问题：
-        如果不是生成模型，而是别人已经做好的打分器的话，会返回这样的loss吗？
-        
-        Results: 
-        
-        你的三个问题都非常核心，涉及生成模型的内部机制和评估方法。我逐一分析：
-        
-        ### 第一个问题：模型内部如何对比生成和原作的loss/likelihood？
-        
-        这取决于模型的类型和设计意图：
-        
-        1. **自回归模型**（如Music Transformer）：
-            - 训练时：通过交叉熵损失预测下一个音符/音频片段
-            - **生成时**：若想对比原曲，需要强制让模型在生成过程中每一步都访问原作的ground truth数据，计算每个生成步骤的likelihood（类似teacher forcing）
-            - 实现方法：修改生成逻辑，在采样时同时计算每个token的log概率并累积
-        2. **VAE/GAN类模型**：
-            - 传统VAE训练时计算重构损失（原曲与重建音频的差异），但生成时无法直接对比原曲
-            - 若需生成时对比，需改造模型架构，例如：
-                - 在潜在空间加入原曲的编码特征作为condition
-                - 设计双通道结构：一条生成路径，一条重构路径共享encoder
-        3. **Diffusion模型**：
-            - 训练时通过预测噪声的MSE损失隐式学习数据分布
-            - 生成时可通过计算反向扩散过程中每个step的预测噪声与原曲加噪后的噪声对比（需要访问原曲的加噪版本）
-        
-        **关键难点**：标准生成过程不需要访问原曲，若强行引入原曲对比，可能造成信息泄漏（相当于用原曲当测试集的ground truth）。更合理的做法是在训练时设计特殊的loss约束。
-        
-        ### 第二个问题：生成过程是否返回loss？
-        
-        常规情况：
-        
-        - **训练时**：必然有loss计算（反向传播用）
-        - **生成/推理时**：标准流程**不计算loss**，因为：
-            - loss需要ground truth，而生成时没有正确答案
-            - 生成是开放式的采样过程
-        
-        例外情况：
-        
-        1. **概率输出模型**（如自回归模型）：
-            - 可记录每个生成步骤的token概率 → 计算序列的**对数似然**(log-likelihood)
-            - 例如：GPT类模型生成时保留每个位置的logits，事后计算perplexity
-        2. **强化学习框架**：
-            - 若使用类似PPO的算法，生成时会计算reward（可视为一种likelihood proxy）
-        3. **Teacher Forcing调试模式**：
-            - 在开发阶段，可强制让生成过程使用原曲作为输入，此时能计算loss（但本质上已不是真正的生成）
-        
-        ### 第三个问题：外部打分器如何工作？
-        
-        已有评估工具可分为两类：
-        
-        **1. 基于特征的评估器**（无需训练）：
-        
-        - **音频相似度指标**：
-            - FAD（Frechet Audio Distance）：对比生成/原曲在VGGish特征空间的分布
-            - Chroma-CENS、MFCC距离等
-        - **音乐特性指标**：
-            - 音高分布KL散度
-            - 节奏相似度
-            - 和弦进行匹配度
-        
-        **2. 预训练判别模型**：
-        
-        - **分类器打分**：
-            - 训练一个"音乐质量分类器"，用其置信度作为likelihood proxy
-            - 例如：用NSynth预训练模型提取特征后计算相似度
-        - **对抗性评估**：
-            - 使用GAN的判别器输出作为"真实性分数"
-        - **对比学习模型**：
-            - 如CLAP模型，计算音频-乐谱对齐分数
-        
-        **典型工具包**：
-        
-        - `museval`：音乐结构相似度评估
-        - `mir_eval`：低级特征对比
-        - `audiocraft`（Meta）：内置FAD计算工具
-        - `jukemir`：预训练音乐特征提取
-
 ### Notes for Chun:
 
 - Weights will be downloaded while first time running the API
 - Test sample bolero_ravel.mp3 is 32kHz Stereo, which is fine, if successes on your end, I will convert other samples to the same.
 - Gen sample 0.wav is 32kHz Mono. Both could be use as prompt for MusicGen-melody
 - Folder attached again, in case you missed - https://drive.google.com/drive/u/1/folders/1lbNEaFlvKMymaVumcK2SC7uk91sHknHW
+
+# Testing - 4/10/2025 - Log
+
+### **Summary：**
+
+After clarifying the details with Ziyu and Chun, I calculated the loss for the audio input *0.wav*  using the MusicGen model. I’ve also shared some useful links and a Git repository with Chun for testing the musician-melody model. In the upcoming week, my tasks will include preparing audio data to align with different music generative models, writing Python code to compute the loss for audio examples in batch, and organizing the loss calculations into an Excel sheet for further analysis.
+
+**Previous Log：**
+
+[Testing - 4/9/2025 - Log](https://www.notion.so/Testing-4-9-2025-Log-1d1fc45209738069814dfe32bdea3097?pvs=21) 
+
+**Useful Links：**
+
+AudioCrafe-MusicGen： https://github.com/facebookresearch/audiocraft/blob/main/docs/MUSICGEN.md
+
+Audio-Diffusion-Pytorch： https://github.com/archinetai/audio-diffusion-pytorch
+
+MusicGen Melody Hugging Face：https://huggingface.co/docs/transformers/main/en/model_doc/musicgen_melody#audio-conditional-generation
+
+MusicGen - Melody - 1.5B： https://huggingface.co/facebook/musicgen-melody
+
+MusicGen - Stereo - Small - 300M：https://huggingface.co/facebook/musicgen-stereo-small
+
+**Git Repo：**
+
+Chun, feel free to clone the git, and try with the *musicgen-melody_demo* (more guidance in yesterday’s log) and the *musicgen-melody-loss*. Have fun! 
+
+[https://github.com/YoEv/LossCal](https://github.com/YoEv/LossCal)
+
+### **MusicGen-small Loss Calculation：**
+
+This program first tokenizes the input audio, then processes it through the model to generate outputs, and finally computes the negative log-likelihood (NLL) loss between the generated outputs and the target data.
+
+```python
+import torch
+from audiocraft.models import MusicGen
+from audiocraft.data.audio import audio_read
+from audiocraft.modules.conditioners import ConditioningAttributes
+
+model = MusicGen.get_pretrained('facebook/musicgen-small')
+
+audio_tensor, sr = audio_read('/path/to/0.wav')
+audio_tensor = audio_tensor.unsqueeze(0)
+
+with torch.no_grad():
+    tokens,_ = model.compression_model.encode(audio_tensor)
+
+conditions = [ConditioningAttributes(text={'description': ""})]
+
+input_tokens = tokens[:, :, :-1]  
+print(f"input_tokens.shape: {input_tokens.shape}")
+target_tokens = tokens[:, :, 1:]  
+print(f"target_tokens.shape: {target_tokens.shape}")
+
+with torch.no_grad():
+    outputs = model.lm(
+    input_tokens, 
+    conditions) 
+
+    B, K, T = input_tokens.shape
+    logits = outputs.reshape(-1, outputs.shape[-1])
+    target = target_tokens.reshape(-1)
+    print(f"logits.shape: {logits.shape}")
+
+    loss = torch.nn.functional.cross_entropy(logits,target)
+    print(f"Negative Log-Likelihood Loss: {loss.item()}")
+
+```
+
+**Loss Output：**
+
+```python
+
+# input_tokens.shape: torch.Size([1, 4, 399])
+# target_tokens.shape: torch.Size([1, 4, 399])
+# logits.shape: torch.Size([1596, 2048])
+# Negative Log-Likelihood Loss: 5.701778411865234
+```
+
