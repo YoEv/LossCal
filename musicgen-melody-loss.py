@@ -14,7 +14,7 @@ model.lm = model.lm.to(dtype=torch.float32)
 model.compression_model = model.compression_model.to(dtype=torch.float32)
 
 # ================== 音频处理 ==================
-audio_path = '/content/drive/MyDrive/MusicGen-Melody-Loss/AudioTest/0.wav'
+audio_path = '/path/to/0.wav'
 audio_tensor, sr = audio_read(audio_path)
 
 # 数据预处理（重要：保持float32和设备一致）
